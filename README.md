@@ -10,4 +10,4 @@ If you play the audio in a call, and your friend has a program to decode it (com
 
 
 #### Does it work?
-Maybe?
+Maybe? The end goal is to build a BBS
