@@ -2,15 +2,17 @@
 #include <cmath>
 #include <cstdint>
 #include <portaudio.h>
+#include <csignal>
 
-constexpr int SAMPLE_RATE    = 44100;
-constexpr double TWOPI       = 6.28318530718;
-constexpr int FRAMES_PER_BUF = 64;
-
-constexpr int SECS = 5;
+constexpr int SAMPLE_RATE     = 48000;
+constexpr int SAMPLES_PER_BIT = 480;
+constexpr double TWOPI        = 6.28318530718;
+constexpr int FRAMES_PER_BUF  = 64;
 
 struct Data {
     float phase; 
+    int   samples_in_bit;
+    int   current_freq;
 };
 
 static int paCallback(const void *input,
@@ -22,16 +24,22 @@ static int paCallback(const void *input,
 {
     float *out = (float*)output;
     Data *data = (Data*)userData;
-    const float freq = 440.0f;
     float phase = data->phase;
 
     for (int i = 0; i < frames; i++) {
+        if (data->samples_in_bit == 0) {
+            data->samples_in_bit = SAMPLES_PER_BIT;
+            data->current_freq = (data->current_freq == 1000) ? 2000 : 1000;
+        }
+
         *out++ = sinf(phase);
-        phase += TWOPI * freq / SAMPLE_RATE;
+        phase += TWOPI * data->current_freq / SAMPLE_RATE;
 
         if (phase >= TWOPI) {
             phase -= TWOPI;
         }
+    
+        data->samples_in_bit--;
     }
     
     data->phase = phase;
@@ -48,11 +56,11 @@ int main()
     PaStreamParameters outputParams;
     PaStream *stream;
     PaError err;
-    Data data = { 0.0f };
+    Data data = { 0.0f, 0, 1000 };
 
     err = Pa_Initialize();
     if (err != paNoError) {
-        goto out_err; 
+        return 1; 
     }
 
     outputParams.device = Pa_GetDefaultOutputDevice();
@@ -67,7 +75,7 @@ int main()
     outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
     outputParams.hostApiSpecificStreamInfo = NULL;
 
-    std::cout << "Outputing a 440hz sine wave for " << SECS << "seconds\n";
+    std::cout << "Outputing an alternating sine wave\n";
 
     Pa_OpenStream(
         &stream,
@@ -81,29 +89,24 @@ int main()
     );
 
     if (err != paNoError)
-        goto out_err;
+        return 1;
 
     Pa_SetStreamFinishedCallback(stream, streamFinished);
     err = Pa_StartStream(stream);
     if (err != paNoError)
-        goto out_err;
+        return 1;
 
-    Pa_Sleep(SECS * 1000);
+    Pa_Sleep(10 * 1000);
 
     err = Pa_StopStream(stream);
     if (err != paNoError)
-        goto out_err;
+        return 1;
 
     err = Pa_CloseStream(stream);
     if (err != paNoError)
-        goto out_err;
+        return 1;
 
     Pa_Terminate();
     std::cout << "finished!" << std::endl;
     return 0;
-
-out_err:
-    Pa_Terminate();
-    std::cerr << "An Error Occured!" << std::endl;
-    return 1;
 }
